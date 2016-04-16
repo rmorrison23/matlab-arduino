@@ -1,47 +1,29 @@
-% accelVectors.m - inits serial, creates GUI/plot, creates gif
+% accel_ema.m - create raw and exponential-averaged filtered plots
+%               from accelerometer readings
 function accel_ema
 
 % initialize a serial object
 accel = Serial_Dev(1);
 
-% initialize figure for vector plots
-f = figure('Visible','off');
-f.Position = [0,0,900,400];
-% handleList = guihandles(f);
-% handleList.firstFrame = true;
-% guidata(f,handleList);
+% figure
+f = figure('Position',[0,0,900,400],...
+    'Name','Accelerometer Vectors - Raw and Filtered','Visible','off');
 
+% gif recording setup
 gifHandle = guihandles(f);
 gifHandle.firstFrame = true;
-gifHandle.fileName = 'accel-flp.gif';
+gifHandle.outFile = 'accel-ema.gif';
 guidata(f,gifHandle);
 
-
-f.Units = 'normalized';
-quit.Units = 'normalized';
-f.Name = 'Accelerometer Vectors - Raw and Filtered';
-movegui(f,'center');
-f.Visible = 'on';
-
-% the stop button
+% stop button (stop plotting/serial comm)
 quit = uicontrol('Style','pushbutton','String','Quit',...
     'Position',[790 15 100 25],...
     'Callback',@quit_Callback,...
     'UserData',1);
 
-% callback to stop the loop/plot
-    function quit_Callback(source,eventdata)
-        quit.UserData = 0;
-    end
-
-% the slider
+% slider (changes alpha 0-1)
 slide = uicontrol('Style','slider','Callback',@slide_callback,...
     'Position',[765,130,100,200],'Min',0,'Max',1,'SliderStep',[0.10,0.10]);
-
-% slider callback
-    function slide_callback(source,eventdata)
-        alpha = get(slide,'Value');
-    end
 
 % display alpha value
 slideVal = uicontrol('style','text','Position',[815,335,75,20],...
@@ -52,6 +34,29 @@ range = uicontrol('style','text','Position',[420,335,75,40],...
     'FontSize',10,'FontWeight','normal','FontSize',15,...
     'ForegroundColor','blue');
 
+movegui(f,'center');
+f.Visible = 'on';
+
+% stop the loop/plot callback
+    function quit_Callback(source,~)
+        source.UserData = 0;
+    end
+
+% slider callback
+    function slide_callback(source,~)
+        alpha = source.Value;
+        
+        if alpha == 0.1;
+            set(range,'String','High Filtering','Visible','on');
+        elseif alpha == 0.5
+            set(range,'String','Medium Filtering','Visible','on');
+        elseif alpha == 1
+            set(range,'String','No Filtering','Visible','on');
+        else
+            set(range,'Visible','off');
+        end
+    end
+
 gFilt = zeros(1,3);
 alpha = 0.1;
 
@@ -60,15 +65,13 @@ while (quit.UserData == 1)
     % raw accelrometer readings
     raw = readAcc(accel);
     
-    % ema-filtered accel readings
-    %     gFilt = ema(raw,gFilt,alpha);
-    
+    % apply ema filter
     for i=1:3
         gFilt(i) = (1 - alpha) * gFilt(i) + alpha * raw(i);
     end
     
-    p1 = subplot(1,2,1);
-    cla;    %clear everything from the current axis
+    subplot(1,2,1);
+    cla;    %clear everything from current axis
     
     % plot x,y,z,r acceleration vectors
     line([0 raw(1)], [0 0], [0 0], 'Color', 'r', 'LineWidth', 2, 'Marker', 'o');
@@ -85,7 +88,7 @@ while (quit.UserData == 1)
     zlabel('Z Accel (g)');
     title('Raw Readings');
     
-    p2 = subplot(1,2,2);
+    subplot(1,2,2);
     cla;    %clear everything from the current axis
     
     % plot x,y,z,r acceleration vectors
@@ -106,31 +109,18 @@ while (quit.UserData == 1)
     % print alpha value from slider
     set(slideVal,'String',['alpha=',num2str(alpha,'%.3f')]);
     
-    % display alpha ranges (for gif display)
-    if alpha == 0.1;
-        set(range,'String','High Filtering','Visible','on');
-    elseif alpha == 0.5
-        set(range,'String','Medium Filtering','Visible','on');
-    elseif alpha == 1
-        set(range,'String','No Filtering','Visible','on');
-    else
-        set(range,'Visible','off');
-    end
-    
     drawnow;
     
     % setup gif recording
-    frame = getframe(f);
-    img = frame2im(frame);
+    img = frame2im(getframe(f));
     [imind,cm] = rgb2ind(img,256);
-    outfile = 'testgif.gif';
     
     % create on first iteration, append on subsequent ones
     if gifHandle.firstFrame
-        imwrite(imind,cm,gifHandle.fileName,'gif','DelayTime',0,'loopcount',inf);
+        imwrite(imind,cm,gifHandle.outFile,'gif','DelayTime',0,'loopcount',inf);
         gifHandle.firstFrame = false;
     else
-        imwrite(imind,cm,gifHandle.fileName,'gif','DelayTime',0,'writemode','append');
+        imwrite(imind,cm,gifHandle.outFile,'gif','DelayTime',0,'writemode','append');
     end
 end
 
